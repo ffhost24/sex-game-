@@ -241,7 +241,6 @@
             border-color: #2d2d44 !important;
         }
 
-        /* Casino Core Adjustments & New Animations */
         .casino-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
@@ -325,7 +324,12 @@
             cursor: pointer;
         }
 
-        /* Animations */
+        .management-flex {
+            display: flex;
+            gap: 15px;
+            margin-top: 25px;
+        }
+
         @keyframes shake {
             0% { transform: translate(2px, 1px) rotate(0deg); }
             10% { transform: translate(-1px, -2px) rotate(-1deg); }
@@ -355,7 +359,6 @@
         .animate-spin { animation: spin 0.6s ease-out; }
         .animate-flip { animation: flip 0.8s ease-out; }
 
-        /* Hacker Arena Styles */
         .arena-log {
             background: #05050a;
             border: 1px solid #1a3a1a;
@@ -418,7 +421,6 @@
 
         <div class="content-area">
             
-            <!-- BUSINESSES & OPERATIONS PANEL -->
             <div id="businesses" class="panel active">
                 <div class="clicker-section">
                     <button class="main-click-btn" onclick="manualClick()">Siphons</button>
@@ -428,11 +430,9 @@
                 <div class="grid-layout" id="business-grid"></div>
             </div>
 
-            <!-- CASINO PANEL -->
             <div id="casino" class="panel">
                 <h2>Neon Cyber Casino</h2>
                 <div class="casino-grid">
-                    <!-- DICE -->
                     <div class="casino-box">
                         <div>
                             <h3>High-Tech Dice</h3>
@@ -446,7 +446,6 @@
                             <button class="action-btn" id="dice-btn" style="width:100%" onclick="playDice()">Roll Protocol</button>
                         </div>
                     </div>
-                    <!-- SLOTS -->
                     <div class="casino-box">
                         <div>
                             <h3>Quantum Slots</h3>
@@ -460,7 +459,6 @@
                             <button class="action-btn" id="slots-btn" style="width:100%" onclick="playSlots()">Cycle Matrix</button>
                         </div>
                     </div>
-                    <!-- COIN FLIP -->
                     <div class="casino-box">
                         <div>
                             <h3>Network Flip</h3>
@@ -480,7 +478,6 @@
                             <button class="action-btn" id="coin-btn" style="width:100%" onclick="playCoinFlip()">Transmit Packet</button>
                         </div>
                     </div>
-                    <!-- NEON CRASH -->
                     <div class="casino-box">
                         <div>
                             <h3>Multiplier Crash</h3>
@@ -499,7 +496,6 @@
                 </div>
             </div>
 
-            <!-- HACKER NETRUNNER ARENA -->
             <div id="hacker" class="panel">
                 <h2>Netrunner Cyber Grid</h2>
                 <div class="card" style="margin-bottom: 20px; width: 100%;">
@@ -510,10 +506,13 @@
                 </div>
             </div>
 
-            <!-- BLACK MARKET CRAFTING -->
             <div id="market" class="panel">
                 <h2>Underground Black Market</h2>
                 <div class="grid-layout" id="market-grid"></div>
+                
+                <div class="management-flex">
+                    <button class="action-btn" style="background:#4c2525; border-color:#753d3d;" onclick="resetGameData()">Wipe System Memory (Hard Reset)</button>
+                </div>
             </div>
 
         </div>
@@ -542,12 +541,14 @@
             ]
         };
 
+        const defaultState = JSON.parse(JSON.stringify(gameState));
         const slotSymbols = ['🍒', '💎', '🍋', '🌌', '⚡'];
         let crashInterval = null;
         let crashMultiplier = 1.00;
         let isCrashRunning = false;
 
         window.onload = function() {
+            loadGameData();
             renderBusinesses();
             renderMarket();
             startLoops();
@@ -579,6 +580,62 @@
             setInterval(() => {
                 validateButtons();
             }, 200);
+
+            setInterval(() => {
+                saveGameData();
+            }, 10000);
+        }
+
+        function saveGameData() {
+            localStorage.setItem('neon_empire_save', JSON.stringify(gameState));
+            showToast("Progress compiled & synced to local cache.");
+        }
+
+        function loadGameData() {
+            let saved = localStorage.getItem('neon_empire_save');
+            if (saved) {
+                try {
+                    let parsed = JSON.parse(saved);
+                    if (parsed && typeof parsed === 'object') {
+                        if (typeof parsed.cash === 'number') gameState.cash = parsed.cash;
+                        if (typeof parsed.level === 'number') gameState.level = parsed.level;
+                        if (typeof parsed.xp === 'number') gameState.xp = parsed.xp;
+                        if (typeof parsed.xpNeeded === 'number') gameState.xpNeeded = parsed.xpNeeded;
+                        
+                        if (Array.isArray(parsed.businesses)) {
+                            parsed.businesses.forEach(savedBiz => {
+                                let localBiz = gameState.businesses.find(b => b.id === savedBiz.id);
+                                if (localBiz) {
+                                    localBiz.owned = savedBiz.owned || 0;
+                                    localBiz.cost = savedBiz.cost || localBiz.baseCost;
+                                }
+                            });
+                        }
+
+                        if (Array.isArray(parsed.blueprints)) {
+                            parsed.blueprints.forEach(savedBp => {
+                                let localBp = gameState.blueprints.find(b => b.id === savedBp.id);
+                                if (localBp) {
+                                    localBp.purchased = savedBp.purchased || false;
+                                }
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.error("Local recovery corrupted. Reverting initialization parameters.", e);
+                }
+            }
+        }
+
+        function resetGameData() {
+            if (confirm("Execute total wipe of local environment memory? Progression will be permanently deleted.")) {
+                localStorage.removeItem('neon_empire_save');
+                gameState = JSON.parse(JSON.stringify(defaultState));
+                renderBusinesses();
+                renderMarket();
+                updateUI();
+                showToast("System flushed. Core registers reset.");
+            }
         }
 
         function switchTab(tabId) {
@@ -669,13 +726,17 @@
                 const card = document.createElement('div');
                 card.className = 'card';
                 card.id = `bp-card-${blueprint.id}`;
+                
+                let btnText = blueprint.purchased ? "Integrated Status" : `Procure Mod ($${blueprint.cost})`;
+                let isDisabled = blueprint.purchased ? "disabled" : "";
+
                 card.innerHTML = `
                     <div>
                         <div class="card-title">${blueprint.name}</div>
                         <div class="card-meta" style="color:var(--accent-neon)">${blueprint.desc}</div>
                     </div>
-                    <button class="action-btn" id="btn-${blueprint.id}" onclick="buyBlueprint(${index})">
-                        Procure Mod ($${blueprint.cost})
+                    <button class="action-btn" id="btn-${blueprint.id}" ${isDisabled} onclick="buyBlueprint(${index})">
+                        ${btnText}
                     </button>
                 `;
                 container.appendChild(card);
@@ -717,8 +778,6 @@
                 breachBtn.disabled = (gameState.cash < breachCost);
             }
         }
-
-        // ================= CASINO ACTIVITIES & FIXES =================
 
         function playDice() {
             let betInput = document.getElementById('dice-bet');
@@ -861,7 +920,7 @@
                 display.classList.remove('crashed');
                 display.innerText = "1.00x";
                 btn.innerText = "Egress Run (Cash Out)";
-                btn.style.background = var(--accent-red);
+                btn.style.background = 'var(--accent-red)';
 
                 let crashPoint = 1.00;
                 while(Math.random() > 0.05) {
@@ -896,8 +955,6 @@
                 updateUI();
             }
         }
-
-        // ================= NETRUNNER GRID BREACH =================
 
         function runBreach() {
             let cost = 500 * gameState.level;
